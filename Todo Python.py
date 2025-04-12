@@ -1,3 +1,5 @@
+# -- YOU CAN CREATE A CUSTOM THEME BASED OFF THE CUSTOME CTHEME FILE I PROVIDED --
+
 import customtkinter
 import tkinter as tk
 import tkinter.messagebox
