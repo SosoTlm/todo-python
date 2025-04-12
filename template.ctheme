@@ -1,0 +1,9 @@
+# Your Very Own Todo Python Theme
+ADD_TO_MENU = True # Turn to false if you don't wanna add it as a physical button to the settings tab (i recommend letting it to true)
+MENU_NAME = "Your Theme" # Customize the name of your theme
+
+BACKCOLOR = (200, 220, 240)  # RGB Color to change the app BG color (bugged)
+
+BACKCOLOR.GRADIENT = "linear-gradient(to right, (100, 150, 200), (150, 200, 250))" # I higly recommend not to add a gradient, it's in work
+
+CUSTOM.STATUSES = ["Your Custom Status 1", "Your Custom Status 2] # Custom status (like in progress, to do, etc...) max limit of 2 tho

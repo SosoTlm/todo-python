@@ -1,9 +1,0 @@
-# My Custom Theme
-ADD_TO_MENU = True
-MENU_NAME = "Minimalist"
-
-BACKCOLOR = (200, 220, 240)  # RGB tuple
-
-BACKCOLOR.GRADIENT = "linear-gradient(to right, (100, 150, 200), (150, 200, 250))"
-
-CUSTOM.STATUSES = []
