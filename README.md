@@ -7,4 +7,4 @@ This is a custom todo app made by me to manage your tasks, this uses python 3.13
 - Tkinter ([Documentation](https://docs.python.org/3/library/tkinter.html))
 
 # ❓ Help
-The "todo-python" documentation is currently in work, visit the main [page](https://todo-python.vercel.app) to find pre-made themes for the app.
+The "todo-python" documentation is currently in work, visit the main [page](https://todo-python-fawn.vercel.app) to find pre-made themes for the app.
