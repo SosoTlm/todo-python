@@ -18,7 +18,8 @@ A lightweight and modern ToDo list application built with **Python 3.13** and **
 
 ### 📦 Install dependencies
 ```bash
-pip install customtkinter```
+pip install customtkinter
+```
 
-# ❓ Help
+## ❓ Help
 The "todo-python" documentation is currently in work, visit the main [page](https://todo-python-fawn.vercel.app) to find pre-made themes for the app.
