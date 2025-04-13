@@ -613,9 +613,9 @@ class KanbanBoardApp(customtkinter.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("CustomTkinter Kanban Board")
+        self.title("Todo-Python: The lightweight ToDo Taksk Aplication")
         self.geometry("1000x650")
-        self.grid_columnconfigure(len(STATUSES), weight=1) # Adjust column configuration based on statuses
+        self.grid_columnconfigure(len(STATUSES), weight=1)  # Adjust column configuration based on statuses
         self.tasks = load_tasks()
 
         self.button_frame = customtkinter.CTkFrame(self)
@@ -645,7 +645,7 @@ class KanbanBoardApp(customtkinter.CTk):
         self.update_board()
 
     def show_add_task_dialog(self):
-        AddTaskDialog(self).mainloop() # Ensure the dialog's status menu is updated on creation
+        AddTaskDialog(self).mainloop()  # Ensure the dialog's status menu is updated on creation
 
     def show_settings_dialog(self):
         SettingsDialog(self, self)
@@ -678,8 +678,12 @@ class KanbanBoardApp(customtkinter.CTk):
 
         tasks_by_status = {status: [] for status in STATUSES}
         for task in self.tasks:
+            # Vérifie que le statut est valide, sinon attribue 'Todo' comme statut par défaut
+            if task['status'] not in tasks_by_status:
+                task['status'] = 'Todo'  # Définit 'Todo' comme statut par défaut si ce n'est pas valide
             tasks_by_status[task['status']].append(task)
 
+        # Affiche les tâches dans leurs colonnes respectives
         for status, tasks in tasks_by_status.items():
             if status in self.status_scrollable_frames:
                 for task in tasks:
