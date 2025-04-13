@@ -22,7 +22,7 @@ def check_for_updates(current_file_path):
     download_url_raw = "https://raw.githubusercontent.com/SosoTlm/todo-python/main/Todo%20Python.py"
 
     try:
-        print("Checking for updates...")
+        print("Checking for Todo-Python Updates, please wait...")
         response = requests.get(check_url)
         response.raise_for_status()  # Raise an exception for bad status codes
         latest_code = response.text
@@ -32,9 +32,9 @@ def check_for_updates(current_file_path):
 
         if latest_code != current_code:
             print("A code update is available.")
-            install = input("Do you want to install the update? (yes/no): ").lower()
+            install = input("Do you want to install the update now? (yes/no): ").lower()
             if install == 'yes':
-                print("Downloading the latest version...")
+                print("Downloading the new version...")
                 download_response = requests.get(download_url_raw)
                 download_response.raise_for_status()
                 updated_code = download_response.text
@@ -43,25 +43,25 @@ def check_for_updates(current_file_path):
                     os.remove(current_file_path)
                     with open(current_file_path, 'w', encoding='utf-8') as f:
                         f.write(updated_code)
-                    print("Update installed successfully. Please restart the application.")
+                    print("Update installed successfully! Please restart the application.")
                 except Exception as e:
-                    print(f"Error installing the update: {e}")
+                    print(f"Error while nstalling the update: {e}")
             else:
                 print("Update installation skipped.")
         else:
             print("Your code is already up to date.")
 
     except requests.exceptions.RequestException as e:
-        print(f"Error checking for updates: {e}")
+        print(f"Error while checking for updates: {e}")
     except FileNotFoundError:
-        print(f"Error: Current file not found at {current_file_path}")
+        print(f"Error: Current file has not been found at {current_file_path}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
 
 # --- Constants ---
 DATA_FILE = "kanban_tasks.json"
-STATUSES = ["todo", "inprogress", "done"]
-PRIORITIES = ["low", "medium", "high"]
+STATUSES = ["Todo", "InProgress", "Done"]
+PRIORITIES = ["Low", "Important", "Urgent"]
 VERSION = "0.1.0"
 DEFAULT_THEMES = ["System", "Dark", "Light"]
 
@@ -116,10 +116,10 @@ def apply_custom_theme(app, theme_data):
 def create_task(title, description, status="todo", priority="medium", due_date=None):
     if status not in STATUSES:
         print(f"Warning: Invalid status '{status}'. Defaulting to 'todo'.")
-        status = "todo"
+        status = "Todo"
     if priority not in PRIORITIES:
         print(f"Warning: Invalid priority '{priority}'. Defaulting to 'medium'.")
-        priority = "medium"
+        priority = "Important"
     return {
         "id": str(uuid.uuid4()),
         "title": title,
@@ -174,9 +174,9 @@ class TaskFrame(customtkinter.CTkFrame):
         self.context_menu.add_command(label="Remove", command=self.remove_task)
 
     def _get_priority_color(self, priority):
-        if priority == 'high':
+        if priority == 'Urgent':
             return "red"
-        elif priority == 'medium':
+        elif priority == 'Important':
             return "yellow"
         else:
             return "green"
@@ -392,7 +392,7 @@ class SettingsDialog(customtkinter.CTkToplevel):
         self.load_custom_theme_button = customtkinter.CTkButton(self, text="Add Custom Theme File", command=self.load_custom_theme_file)
         self.load_custom_theme_button.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
 
-        self.version_label = customtkinter.CTkLabel(self, text=f"Version: {VERSION}")
+        self.version_label = customtkinter.CTkLabel(self, text=f"Build: Beta 0.332.1")
         self.version_label.grid(row=4, column=0, padx=20, pady=(10, 20), sticky="w")
 
         self.custom_theme_buttons_frame = customtkinter.CTkFrame(self)
@@ -447,7 +447,7 @@ class AddTaskDialog(customtkinter.CTkToplevel):
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
         self.master = master
-        self.title("Add New Task")
+        self.title("Add A New ToDo-Task")
         self.geometry("400x300")
         self.resizable(False, False)
 
@@ -465,7 +465,7 @@ class AddTaskDialog(customtkinter.CTkToplevel):
         self.priority_label.grid(row=2, column=0, padx=10, pady=10, sticky="w")
         self.priority_menu = customtkinter.CTkOptionMenu(self, values=PRIORITIES)
         self.priority_menu.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
-        self.priority_menu.set("medium")
+        self.priority_menu.set("Important")
 
         self.due_date_label = customtkinter.CTkLabel(self, text="Due Date (YYYY-MM-DD):")
         self.due_date_label.grid(row=3, column=0, padx=10, pady=10, sticky="w")
@@ -476,9 +476,9 @@ class AddTaskDialog(customtkinter.CTkToplevel):
         self.status_label.grid(row=4, column=0, padx=10, pady=10, sticky="w")
         self.status_menu = customtkinter.CTkOptionMenu(self, values=STATUSES)
         self.status_menu.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
-        self.status_menu.set("todo")
+        self.status_menu.set("Todo")
 
-        self.add_button = customtkinter.CTkButton(self, text="Add Task", command=self.add_task)
+        self.add_button = customtkinter.CTkButton(self, text="Add Todo-Task", command=self.add_task)
         self.add_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
 
         self.protocol("WM_DELETE_WINDOW", self.destroy)
