@@ -7,4 +7,5 @@ BACKCOLOR = (200, 220, 240)  # RGB Color to change the app BG color (bugged)
 BACKCOLOR.GRADIENT = "linear-gradient(to right, (100, 150, 200), (150, 200, 250))" # I higly recommend not to add a gradient, it's in work
 
 CUSTOM.STATUSES = ["Your Custom Status 1", "Your Custom Status 2] # Custom status (like in progress, to do, etc...) max limit of 2 tho
-# Modify only with those values, any other values added that does not exist will crash your app and maybe corrupt the app too!
+
+# -- CTHEME Extension By SosoTlm, ONLY MODIFY THE 5 VARIABLES CONTENT OTHERWISE THE FILE WILL NOT BE READABLE BY THE APP
