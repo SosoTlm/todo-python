@@ -1,702 +1,535 @@
-# -- YOU CAN CREATE A CUSTOM THEME BASED OFF THE CUSTOME CTHEME FILE I PROVIDED --
-
-import customtkinter
+import customtkinter as ctk
 import tkinter as tk
-import tkinter.messagebox
-import tkinter.filedialog
 import json
 import os
 import uuid
 from datetime import datetime
-import ast  # For safely evaluating Python-like syntax
-import requests  # Import for update functionality
+import threading
+import time
 
-def check_for_updates(current_file_path):
-    """
-    Checks for updates to the Todo Python script from GitHub.
-
-    Args:
-        current_file_path (str): The absolute path to the current Todo Python.py file.
-    """
-    check_url = "https://raw.githubusercontent.com/SosoTlm/todo-python/refs/heads/main/Todo%20Python.py"
-    download_url_raw = "https://raw.githubusercontent.com/SosoTlm/todo-python/main/Todo%20Python.py"
-
-    try:
-        print("Checking for Todo-Python Updates, please wait...")
-        response = requests.get(check_url)
-        response.raise_for_status()  # Raise an exception for bad status codes
-        latest_code = response.text
-
-        with open(current_file_path, 'r', encoding='utf-8') as f:
-            current_code = f.read()
-
-        if latest_code != current_code:
-            print("A code update is available.")
-            install = input("Do you want to install the update now? (yes/no): ").lower()
-            if install == 'yes':
-                print("Downloading the new version...")
-                download_response = requests.get(download_url_raw)
-                download_response.raise_for_status()
-                updated_code = download_response.text
-
-                try:
-                    os.remove(current_file_path)
-                    with open(current_file_path, 'w', encoding='utf-8') as f:
-                        f.write(updated_code)
-                    print("Update installed successfully! Please restart the application.")
-                except Exception as e:
-                    print(f"Error while nstalling the update: {e}")
-            else:
-                print("Update installation skipped.")
-        else:
-            print("Your code is already up to date.")
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error while checking for updates: {e}")
-    except FileNotFoundError:
-        print(f"Error: Current file has not been found at {current_file_path}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-
-# --- Constants ---
-DATA_FILE = "kanban_tasks.json"
+# Constants
+DATA_FILE = "tasks.json"
 STATUSES = ["Todo", "InProgress", "Done"]
 PRIORITIES = ["Low", "Important", "Urgent"]
-VERSION = "0.1.0"
-DEFAULT_THEMES = ["System", "Dark", "Light"]
 
-# --- Helper function to read and parse ctheme file ---
-def parse_ctheme_file(filepath):
-    theme_data = {}
-    try:
-        with open(filepath, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    key, value_str = line.split("=", 1)
-                    key = key.strip()
-                    value_str = value_str.strip()
-                    try:
-                        theme_data[key] = ast.literal_eval(value_str)
-                    except (ValueError, SyntaxError):
-                        theme_data[key] = value_str
-    except FileNotFoundError:
-        tkinter.messagebox.showerror("Error", f"Theme file not found: {filepath}")
-        return None
-    return theme_data
-
-# --- Function to apply a custom theme ---
-def apply_custom_theme(app, theme_data):
-    if not theme_data:
-        return
-
-    if 'BACKCOLOR' in theme_data:
-        try:
-            bg_color = theme_data['BACKCOLOR']
-            app.configure(bg=f'rgb{bg_color}')
-            for frame in [app.todo_frame, app.inprogress_frame, app.done_frame, app.button_frame]:
-                frame.configure(fg_color=bg_color)
-            app.update_board()
-        except Exception as e:
-            print(f"Error applying BACKCOLOR: {e}")
-
-    if 'BACKCOLOR.GRADIENT' in theme_data:
-        gradient_str = theme_data['BACKCOLOR.GRADIENT']
-        print(f"Gradient not yet implemented: {gradient_str}") # Placeholder
-
-    if 'CUSTOM.STATUSES' in theme_data:
-        custom_statuses = theme_data['CUSTOM.STATUSES']
-        global STATUSES
-        STATUSES = DEFAULT_THEMES + custom_statuses # Update global statuses
-        app.update_board() # Re-render might be needed if statuses affect layout
-
-# --- Task Structure (using dictionary) ---
-def create_task(title, description, status="todo", priority="medium", due_date=None):
-    if status not in STATUSES:
-        print(f"Warning: Invalid status '{status}'. Defaulting to 'todo'.")
-        status = "Todo"
-    if priority not in PRIORITIES:
-        print(f"Warning: Invalid priority '{priority}'. Defaulting to 'medium'.")
-        priority = "Important"
-    return {
-        "id": str(uuid.uuid4()),
-        "title": title,
-        "description": description,
-        "status": status,
-        "priority": priority,
-        "due_date": due_date,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
-    }
-
-# --- Data Persistence ---
-def load_tasks():
-    if not os.path.exists(DATA_FILE):
-        return []
-    try:
-        with open(DATA_FILE, 'r') as f:
-            tasks = json.load(f)
-            if not isinstance(tasks, list):
-                print(f"Warning: Data file '{DATA_FILE}' does not contain a list. Starting fresh.")
-                return []
-            return tasks
-    except (json.JSONDecodeError, IOError) as e:
-        print(f"Error loading tasks from {DATA_FILE}: {e}")
-        return []
-
-def save_tasks(tasks):
-    try:
-        with open(DATA_FILE, 'w') as f:
-            json.dump(tasks, f, indent=4)
-    except IOError as e:
-        print(f"Error saving tasks to {DATA_FILE}: {e}")
-
-# --- Core Functions (modified for customtkinter) ---
-# We'll need to adapt these to interact with the GUI elements.
-
-class TaskFrame(customtkinter.CTkFrame):
-    def __init__(self, master, task, app, **kwargs):
-        super().__init__(master, **kwargs)
-        self.task = task
-        self.app = app
-        self.grid_columnconfigure(0, weight=1)
-        self.title_label = customtkinter.CTkLabel(self, text=task['title'], font=customtkinter.CTkFont(size=14, weight="bold"))
-        self.title_label.grid(row=0, column=0, padx=5, pady=(5, 0), sticky="ew")
-        self.priority_label = customtkinter.CTkLabel(self, text=f"Priority: {task['priority'].capitalize()}", fg_color=self._get_priority_color(task['priority']))
-        self.priority_label.grid(row=1, column=0, padx=5, pady=(0, 5), sticky="ew")
-        self.bind("<Button-1>", self.show_details)
-        self.bind("<Button-3>", self.show_context_menu) # Bind right-click
-
-        self.context_menu = tk.Menu(self, tearoff=0)
-        self.context_menu.add_command(label="Edit", command=self.edit_task)
-        self.context_menu.add_command(label="Remove", command=self.remove_task)
-
-    def _get_priority_color(self, priority):
-        if priority == 'Urgent':
-            return "red"
-        elif priority == 'Important':
-            return "yellow"
-        else:
-            return "green"
-
-    def show_details(self, event):
-        EditTaskDialog(self.app, self.task)
-
-    def show_context_menu(self, event):
-        try:
-            self.context_menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            self.context_menu.grab_release()
-
-    def edit_task(self):
-        EditTaskDialog(self.app, self.task)
-
-    def remove_task(self):
-        if tkinter.messagebox.askyesno("Confirm Remove", f"Are you sure you want to remove '{self.task['title']}'?"):
-            self.app.tasks.remove(self.task)
-            self.app.update_board()
-            save_tasks(self.app.tasks)
-
-class AddTaskDialog(customtkinter.CTkToplevel):
-    def __init__(self, master, **kwargs):
-        super().__init__(master, **kwargs)
-        self.master = master
-        self.title("Add New Task")
-        self.geometry("400x300")
-        self.resizable(False, False)
-
-        self.title_label = customtkinter.CTkLabel(self, text="Title:")
-        self.title_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.title_entry = customtkinter.CTkEntry(self)
-        self.title_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-
-        self.description_label = customtkinter.CTkLabel(self, text="Description:")
-        self.description_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        self.description_entry = customtkinter.CTkTextbox(self, height=50)
-        self.description_entry.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-
-        self.priority_label = customtkinter.CTkLabel(self, text="Priority:")
-        self.priority_label.grid(row=2, column=0, padx=10, pady=10, sticky="w")
-        self.priority_menu = customtkinter.CTkOptionMenu(self, values=PRIORITIES)
-        self.priority_menu.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
-        self.priority_menu.set("medium")
-
-        self.due_date_label = customtkinter.CTkLabel(self, text="Due Date (YYYY-MM-DD):")
-        self.due_date_label.grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        self.due_date_entry = customtkinter.CTkEntry(self)
-        self.due_date_entry.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
-
-        self.status_label = customtkinter.CTkLabel(self, text="Status:")
-        self.status_label.grid(row=4, column=0, padx=10, pady=10, sticky="w")
-        self.status_menu = customtkinter.CTkOptionMenu(self, values=STATUSES)
-        self.status_menu.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
-        self.status_menu.set("todo")
-
-        self.add_button = customtkinter.CTkButton(self, text="Add Task", command=self.add_task)
-        self.add_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
-
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-        self.focus()
-        self.grab_set()
-
-    def add_task(self):
-        title = self.title_entry.get().strip()
-        description = self.description_entry.get("0.0", "end").strip()
-        priority = self.priority_menu.get()
-        due_date = self.due_date_entry.get().strip()
-        status = self.status_menu.get()
-
-        if not title:
-            tkinter.messagebox.showerror("Error", "Title cannot be empty.")
-            return
-
-        new_task = create_task(title, description, status, priority, due_date)
-        self.master.tasks.append(new_task)
-        self.master.update_board()
-        save_tasks(self.master.tasks)
-        self.destroy()
-
-class EditTaskDialog(customtkinter.CTkToplevel):
-    def __init__(self, master, task, **kwargs):
-        super().__init__(master, **kwargs)
-        self.master = master
-        self.task = task
-        self.title(f"Edit Task: {task['title']}")
-        self.geometry("400x350")
-        self.resizable(False, False)
-
-        self.title_label = customtkinter.CTkLabel(self, text="Title:")
-        self.title_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.title_entry = customtkinter.CTkEntry(self, textvariable=customtkinter.StringVar(value=task['title']))
-        self.title_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-
-        self.description_label = customtkinter.CTkLabel(self, text="Description:")
-        self.description_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        self.description_entry = customtkinter.CTkTextbox(self, height=50)
-        self.description_entry.insert("0.0", task['description'])
-        self.description_entry.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-
-        self.priority_label = customtkinter.CTkLabel(self, text="Priority:")
-        self.priority_label.grid(row=2, column=0, padx=10, pady=10, sticky="w")
-        self.priority_menu = customtkinter.CTkOptionMenu(self, values=PRIORITIES)
-        self.priority_menu.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
-        self.priority_menu.set(task['priority'])
-
-        self.due_date_label = customtkinter.CTkLabel(self, text="Due Date (YYYY-MM-DD):")
-        self.due_date_label.grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        self.due_date_entry = customtkinter.CTkEntry(self, textvariable=customtkinter.StringVar(value=task.get('due_date', '')))
-        self.due_date_entry.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
-
-        self.status_label = customtkinter.CTkLabel(self, text="Status:")
-        self.status_label.grid(row=4, column=0, padx=10, pady=10, sticky="w")
-        self.status_menu = customtkinter.CTkOptionMenu(self, values=STATUSES, command=self.status_changed)
-        self.status_menu.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
-        self.status_menu.set(task['status'])
-
-        self.move_back_button = customtkinter.CTkButton(self, text="Move Back", command=self.move_back)
-        self.move_back_button.grid(row=5, column=0, padx=10, pady=10, sticky="ew")
-        self.move_forward_button = customtkinter.CTkButton(self, text="Move Forward", command=self.move_forward)
-        self.move_forward_button.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
-
-        self.save_button = customtkinter.CTkButton(self, text="Save Changes", command=self.save_changes)
-        self.save_button.grid(row=6, column=0, padx=10, pady=10, sticky="ew")
-        self.delete_button = customtkinter.CTkButton(self, text="Delete Task", fg_color="darkred", hover_color="red", command=self.delete_task)
-        self.delete_button.grid(row=6, column=1, padx=10, pady=10, sticky="ew")
-
-        self._update_move_button_state()
-
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-        self.focus()
-        self.grab_set()
-
-    def save_changes(self):
-        title = self.title_entry.get().strip()
-        description = self.description_entry.get("0.0", "end").strip()
-        priority = self.priority_menu.get()
-        due_date = self.due_date_entry.get().strip()
-        status = self.status_menu.get()
-
-        if not title:
-            tkinter.messagebox.showerror("Error", "Title cannot be empty.")
-            return
-
-        self.task['title'] = title
-        self.task['description'] = description
-        self.task['priority'] = priority
-        self.task['due_date'] = due_date if due_date else None
-        self.task['status'] = status
-        self.task['updated_at'] = datetime.now().isoformat()
-        self.master.update_board()
-        save_tasks(self.master.tasks)
-        self.destroy()
-
-    def delete_task(self):
-        if tkinter.messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{self.task['title']}'?"):
-            self.master.tasks.remove(self.task)
-            self.master.update_board()
-            save_tasks(self.master.tasks)
-            self.destroy()
-
-    def move_forward(self):
-        current_status_index = STATUSES.index(self.task['status'])
-        if current_status_index < len(STATUSES) - 1:
-            self.task['status'] = STATUSES[current_status_index + 1]
-            self.task['updated_at'] = datetime.now().isoformat()
-            self.master.update_board()
-            save_tasks(self.master.tasks)
-            self._update_move_button_state()
-
-    def move_back(self):
-        current_status_index = STATUSES.index(self.task['status'])
-        if current_status_index > 0:
-            self.task['status'] = STATUSES[current_status_index - 1]
-            self.task['updated_at'] = datetime.now().isoformat()
-            self.master.update_board()
-            save_tasks(self.master.tasks)
-            self._update_move_button_state()
-
-    def status_changed(self, new_status):
-        self._update_move_button_state()
-
-    def _update_move_button_state(self):
-        current_status_index = STATUSES.index(self.task['status'])
-        self.move_back_button.configure(state="normal" if current_status_index > 0 else "disabled")
-        self.move_forward_button.configure(state="normal" if current_status_index < len(STATUSES) - 1 else "disabled")
-
-class SettingsDialog(customtkinter.CTkToplevel):
-    def __init__(self, master, app, **kwargs):
-        super().__init__(master, **kwargs)
-        self.master = master
-        self.app = app
-        self.title("Settings")
-        self.geometry("300x300") # Increased height
-        self.resizable(False, False)
-
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(0, weight=0) # Theme label
-        self.grid_rowconfigure(1, weight=0) # Theme menu
-        self.grid_rowconfigure(2, weight=0) # Load custom button
-        self.grid_rowconfigure(3, weight=1) # Spacer for dynamic buttons
-        self.grid_rowconfigure(4, weight=0) # Version label
-
-        self.theme_label = customtkinter.CTkLabel(self, text="Theme:")
-        self.theme_label.grid(row=0, column=0, padx=20, pady=(20, 0), sticky="w")
-
-        self.theme_menu_values = DEFAULT_THEMES[:] # Start with default themes
-        self.theme_menu = customtkinter.CTkOptionMenu(self, values=self.theme_menu_values, command=self.change_theme)
-        self.theme_menu.set(customtkinter.get_appearance_mode())
-        self.theme_menu.grid(row=1, column=0, padx=20, pady=(0, 10), sticky="ew")
-
-        self.load_custom_theme_button = customtkinter.CTkButton(self, text="Add Custom Theme File", command=self.load_custom_theme_file)
-        self.load_custom_theme_button.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
-
-        self.version_label = customtkinter.CTkLabel(self, text=f"Build: Beta 0.332.1")
-        self.version_label.grid(row=4, column=0, padx=20, pady=(10, 20), sticky="w")
-
-        self.custom_theme_buttons_frame = customtkinter.CTkFrame(self)
-        self.custom_theme_buttons_frame.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
-        self.custom_theme_buttons_frame.grid_columnconfigure(0, weight=1)
-
-        self.loaded_custom_themes = {} # Store loaded theme data and names
-        self.update_theme_menu()
-
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-        self.focus()
-        self.grab_set()
-
-    def change_theme(self, theme):
-        if theme in ["Dark", "Light", "System"]:
-            customtkinter.set_appearance_mode(theme)
-            customtkinter.set_default_color_theme("blue") # Reset default color theme
-            self.app.update_board()
-        elif theme in self.loaded_custom_themes:
-            apply_custom_theme(self.app, self.loaded_custom_themes[theme])
-
-    def load_custom_theme_file(self):
-        filepath = customtkinter.filedialog.askopenfilename(
-            title="Select Custom Theme File",
-            filetypes=[("Custom Theme", "*.ctheme")]
-        )
-        if filepath:
-            theme_data = parse_ctheme_file(filepath)
-            if theme_data and theme_data.get('ADD_TO_MENU') == True and 'MENU_NAME' in theme_data:
-                menu_name = theme_data['MENU_NAME']
-                if menu_name not in self.loaded_custom_themes:
-                    self.loaded_custom_themes[menu_name] = theme_data
-                    self.update_theme_menu()
-                    tkinter.messagebox.showinfo("Info", f"Custom theme '{menu_name}' added to the theme menu.")
-            elif theme_data:
-                apply_custom_theme(self.app, theme_data) # Apply even if not added to menu
-                tkinter.messagebox.showinfo("Info", "Custom theme loaded (applied directly).")
-                self.app.update_board()
-            else:
-                tkinter.messagebox.showerror("Error", "Invalid custom theme file.")
-
-    def update_theme_menu(self):
-        self.theme_menu_values = DEFAULT_THEMES + list(self.loaded_custom_themes.keys())
-        self.theme_menu.configure(values=self.theme_menu_values)
-        # Keep the current selection if it's still valid
-        current_theme = self.theme_menu.get()
-        if current_theme not in self.theme_menu_values:
-            self.theme_menu.set(customtkinter.get_appearance_mode())
-
-# --- Modifications needed in AddTaskDialog and EditTaskDialog for custom statuses ---
-class AddTaskDialog(customtkinter.CTkToplevel):
-    def __init__(self, master, **kwargs):
-        super().__init__(master, **kwargs)
-        self.master = master
-        self.title("Add A New ToDo-Task")
-        self.geometry("400x300")
-        self.resizable(False, False)
-
-        self.title_label = customtkinter.CTkLabel(self, text="Title:")
-        self.title_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.title_entry = customtkinter.CTkEntry(self)
-        self.title_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-
-        self.description_label = customtkinter.CTkLabel(self, text="Description:")
-        self.description_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        self.description_entry = customtkinter.CTkTextbox(self, height=50)
-        self.description_entry.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-
-        self.priority_label = customtkinter.CTkLabel(self, text="Priority:")
-        self.priority_label.grid(row=2, column=0, padx=10, pady=10, sticky="w")
-        self.priority_menu = customtkinter.CTkOptionMenu(self, values=PRIORITIES)
-        self.priority_menu.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
-        self.priority_menu.set("Important")
-
-        self.due_date_label = customtkinter.CTkLabel(self, text="Due Date (YYYY-MM-DD):")
-        self.due_date_label.grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        self.due_date_entry = customtkinter.CTkEntry(self)
-        self.due_date_entry.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
-
-        self.status_label = customtkinter.CTkLabel(self, text="Status:")
-        self.status_label.grid(row=4, column=0, padx=10, pady=10, sticky="w")
-        self.status_menu = customtkinter.CTkOptionMenu(self, values=STATUSES)
-        self.status_menu.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
-        self.status_menu.set("Todo")
-
-        self.add_button = customtkinter.CTkButton(self, text="Add Todo-Task", command=self.add_task)
-        self.add_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
-
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-        self.focus()
-        self.grab_set()
-
-    def add_task(self):
-        title = self.title_entry.get().strip()
-        description = self.description_entry.get("0.0", "end").strip()
-        priority = self.priority_menu.get()
-        due_date = self.due_date_entry.get().strip()
-        status = self.status_menu.get()
-
-        if not title:
-            tkinter.messagebox.showerror("Error", "Title cannot be empty.")
-            return
-
-        new_task = create_task(title, description, status, priority, due_date)
-        self.master.tasks.append(new_task)
-        self.master.update_board()
-        save_tasks(self.master.tasks)
-        self.destroy()
-
-class EditTaskDialog(customtkinter.CTkToplevel):
-    def __init__(self, master, task, **kwargs):
-        super().__init__(master, **kwargs)
-        self.master = master
-        self.task = task
-        self.title(f"Edit Task: {task['title']}")
-        self.geometry("400x350")
-        self.resizable(False, False)
-
-        self.title_label = customtkinter.CTkLabel(self, text="Title:")
-        self.title_label.grid(row=0, column=0, padx=10, pady=10, sticky="w")
-        self.title_entry = customtkinter.CTkEntry(self, textvariable=customtkinter.StringVar(value=task['title']))
-        self.title_entry.grid(row=0, column=1, padx=10, pady=10, sticky="ew")
-
-        self.description_label = customtkinter.CTkLabel(self, text="Description:")
-        self.description_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
-        self.description_entry = customtkinter.CTkTextbox(self, height=50)
-        self.description_entry.insert("0.0", task['description'])
-        self.description_entry.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-
-        self.priority_label = customtkinter.CTkLabel(self, text="Priority:")
-        self.priority_label.grid(row=2, column=0, padx=10, pady=10, sticky="w")
-        self.priority_menu = customtkinter.CTkOptionMenu(self, values=PRIORITIES)
-        self.priority_menu.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
-        self.priority_menu.set(task['priority'])
-
-        self.due_date_label = customtkinter.CTkLabel(self, text="Due Date (YYYY-MM-DD):")
-        self.due_date_label.grid(row=3, column=0, padx=10, pady=10, sticky="w")
-        self.due_date_entry = customtkinter.CTkEntry(self, textvariable=customtkinter.StringVar(value=task.get('due_date', '')))
-        self.due_date_entry.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
-
-        self.status_label = customtkinter.CTkLabel(self, text="Status:")
-        self.status_label.grid(row=4, column=0, padx=10, pady=10, sticky="w")
-        self.status_menu = customtkinter.CTkOptionMenu(self, values=STATUSES, command=self.status_changed)
-        self.status_menu.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
-        self.status_menu.set(task['status'])
-
-        self.move_back_button = customtkinter.CTkButton(self, text="Move Back", command=self.move_back)
-        self.move_back_button.grid(row=5, column=0, padx=10, pady=10, sticky="ew")
-        self.move_forward_button = customtkinter.CTkButton(self, text="Move Forward", command=self.move_forward)
-        self.move_forward_button.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
-
-        self.save_button = customtkinter.CTkButton(self, text="Save Changes", command=self.save_changes)
-        self.save_button.grid(row=6, column=0, padx=10, pady=10, sticky="ew")
-        self.delete_button = customtkinter.CTkButton(self, text="Delete Task", fg_color="darkred", hover_color="red", command=self.delete_task)
-        self.delete_button.grid(row=6, column=1, padx=10, pady=10, sticky="ew")
-
-        self._update_move_button_state()
-
-        self.protocol("WM_DELETE_WINDOW", self.destroy)
-        self.focus()
-        self.grab_set()
-
-    def save_changes(self):
-        title = self.title_entry.get().strip()
-        description = self.description_entry.get("0.0", "end").strip()
-        priority = self.priority_menu.get()
-        due_date = self.due_date_entry.get().strip()
-        status = self.status_menu.get()
-
-        if not title:
-            tkinter.messagebox.showerror("Error", "Title cannot be empty.")
-            return
-
-        self.task['title'] = title
-        self.task['description'] = description
-        self.task['priority'] = priority
-        self.task['due_date'] = due_date if due_date else None
-        self.task['status'] = status
-        self.task['updated_at'] = datetime.now().isoformat()
-        self.master.update_board()
-        save_tasks(self.master.tasks)
-        self.destroy()
-
-    def delete_task(self):
-        if tkinter.messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete '{self.task['title']}'?"):
-            self.master.tasks.remove(self.task)
-            self.master.update_board()
-            save_tasks(self.master.tasks)
-            self.destroy()
-
-    def move_forward(self):
-        current_status_index = STATUSES.index(self.task['status'])
-        if current_status_index < len(STATUSES) - 1:
-            self.task['status'] = STATUSES[current_status_index + 1]
-            self.task['updated_at'] = datetime.now().isoformat()
-            self.master.update_board()
-            save_tasks(self.master.tasks)
-            self._update_move_button_state()
-
-    def move_back(self):
-        current_status_index = STATUSES.index(self.task['status'])
-        if current_status_index > 0:
-            self.task['status'] = STATUSES[current_status_index - 1]
-            self.task['updated_at'] = datetime.now().isoformat()
-            self.master.update_board()
-            save_tasks(self.master.tasks)
-            self._update_move_button_state()
-
-    def status_changed(self, new_status):
-        self._update_move_button_state()
-
-    def _update_move_button_state(self):
-        current_status_index = STATUSES.index(self.task['status'])
-        self.move_back_button.configure(state="normal" if current_status_index > 0 else "disabled")
-        self.move_forward_button.configure(state="normal" if current_status_index < len(STATUSES) - 1 else "disabled")
-
-class KanbanBoardApp(customtkinter.CTk):
+class ModernTodoApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-
-        self.title("Todo-Python: The lightweight ToDo Taksk Aplication")
-        self.geometry("1000x650")
-        self.grid_columnconfigure(len(STATUSES), weight=1)  # Adjust column configuration based on statuses
-        self.tasks = load_tasks()
-
-        self.button_frame = customtkinter.CTkFrame(self)
-        self.button_frame.grid(row=0, column=0, columnspan=len(STATUSES), padx=20, pady=10, sticky="ew")
-        self.button_frame.grid_columnconfigure(0, weight=1)
-        self.button_frame.grid_columnconfigure(1, weight=1)
-
-        self.add_task_button = customtkinter.CTkButton(self.button_frame, text="Add New Task", command=self.show_add_task_dialog)
-        self.add_task_button.grid(row=0, column=0, padx=(0, 10), pady=10, sticky="ew")
-
-        self.settings_button = customtkinter.CTkButton(self.button_frame, text="Settings", command=self.show_settings_dialog)
-        self.settings_button.grid(row=0, column=1, padx=(10, 0), pady=10, sticky="ew")
-
-        self.status_frames = {}
-        self.status_scrollable_frames = {}
-
-        for i, status in enumerate(STATUSES):
-            frame = customtkinter.CTkFrame(self)
-            frame.grid(row=1, column=i, padx=20, pady=10, sticky="nsew")
-            label = customtkinter.CTkLabel(frame, text=status.capitalize(), font=customtkinter.CTkFont(size=18, weight="bold"))
-            label.pack(padx=10, pady=10)
-            scrollable_frame = customtkinter.CTkScrollableFrame(frame, label_text="")
-            scrollable_frame.pack(padx=10, pady=10, fill="both", expand=True)
-            self.status_frames[status] = frame
-            self.status_scrollable_frames[status] = scrollable_frame
-
+        self.setup_window()
+        self.tasks = self.load_tasks()
+        self.setup_ui()
+        self.show_loading()
+        
+    def setup_window(self):
+        self.title("Ultra Modern Todo")
+        # Adaptive window sizing
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        
+        if screen_width >= 1920:
+            width, height = 1400, 900
+        elif screen_width >= 1366:
+            width, height = 1200, 800
+        else:
+            width, height = min(1000, screen_width-100), min(700, screen_height-100)
+            
+        self.geometry(f"{width}x{height}")
+        self.minsize(800, 600)
+        
+        # Center window
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+        self.geometry(f"{width}x{height}+{x}+{y}")
+        
+        # Modern theme
+        ctk.set_appearance_mode("dark")
+        ctk.set_default_color_theme("blue")
+        
+    def setup_ui(self):
+        # Main container with padding that adapts to window size
+        self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Animated header
+        self.header_frame = ctk.CTkFrame(self.main_frame, height=100, fg_color=("gray90", "gray13"))
+        self.header_frame.pack(fill="x", pady=(0, 20))
+        self.header_frame.pack_propagate(False)
+        
+        self.title_label = ctk.CTkLabel(
+            self.header_frame, 
+            text="✨ Ultra Modern Todo", 
+            font=ctk.CTkFont(size=32, weight="bold"),
+            text_color=("#1e40af", "#3b82f6")
+        )
+        self.title_label.pack(expand=True)
+        
+        # Controls with modern styling
+        self.controls_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.controls_frame.pack(fill="x", pady=(0, 20))
+        
+        self.add_btn = ctk.CTkButton(
+            self.controls_frame,
+            text="➕ Add Task",
+            command=self.show_add_dialog,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            height=40,
+            corner_radius=20,
+            hover_color=("#2563eb", "#1d4ed8")
+        )
+        self.add_btn.pack(side="left", padx=(0, 10))
+        
+        self.settings_btn = ctk.CTkButton(
+            self.controls_frame,
+            text="⚙️ Settings",
+            command=self.show_settings,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            height=40,
+            corner_radius=20,
+            fg_color=("gray75", "gray25"),
+            hover_color=("gray65", "gray35")
+        )
+        self.settings_btn.pack(side="left")
+        
+        # Task board with responsive columns
+        self.board_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.board_frame.pack(fill="both", expand=True)
+        
+        # Configure responsive grid
+        for i in range(len(STATUSES)):
+            self.board_frame.grid_columnconfigure(i, weight=1, uniform="col")
+        self.board_frame.grid_rowconfigure(0, weight=1)
+        
+        self.columns = {}
+        self.create_columns()
         self.update_board()
-
-    def show_add_task_dialog(self):
-        AddTaskDialog(self).mainloop()  # Ensure the dialog's status menu is updated on creation
-
-    def show_settings_dialog(self):
-        SettingsDialog(self, self)
-
+        
+    def create_columns(self):
+        colors = [("#ef4444", "#dc2626"), ("#f59e0b", "#d97706"), ("#10b981", "#059669")]
+        
+        for i, status in enumerate(STATUSES):
+            # Column container
+            col = ctk.CTkFrame(self.board_frame, corner_radius=15)
+            col.grid(row=0, column=i, padx=10, pady=10, sticky="nsew")
+            
+            # Header with status indicator
+            header = ctk.CTkFrame(col, height=60, fg_color=colors[i], corner_radius=10)
+            header.pack(fill="x", padx=10, pady=(10, 5))
+            header.pack_propagate(False)
+            
+            title = ctk.CTkLabel(
+                header, 
+                text=f"{status} ({len([t for t in self.tasks if t['status'] == status])})",
+                font=ctk.CTkFont(size=16, weight="bold"),
+                text_color="white"
+            )
+            title.pack(expand=True)
+            
+            # Scrollable task area
+            scroll = ctk.CTkScrollableFrame(col, fg_color="transparent")
+            scroll.pack(fill="both", expand=True, padx=10, pady=(5, 10))
+            
+            self.columns[status] = {"frame": col, "header": header, "title": title, "scroll": scroll}
+    
     def update_board(self):
-        global STATUSES
-
-        # Destroy existing task frames
-        for frame in self.status_scrollable_frames.values():
-            for widget in frame.winfo_children():
+        # Clear existing tasks
+        for status_data in self.columns.values():
+            for widget in status_data["scroll"].winfo_children():
                 widget.destroy()
-
-        # Recreate columns if statuses have changed
-        existing_statuses = list(self.status_frames.keys())
-        if set(STATUSES) != set(existing_statuses):
-            for status in existing_statuses:
-                self.status_frames[status].destroy()
-            self.status_frames = {}
-            self.status_scrollable_frames = {}
-            self.grid_columnconfigure(len(STATUSES), weight=1)
-            for i, status in enumerate(STATUSES):
-                frame = customtkinter.CTkFrame(self)
-                frame.grid(row=1, column=i, padx=20, pady=10, sticky="nsew")
-                label = customtkinter.CTkLabel(frame, text=status.capitalize(), font=customtkinter.CTkFont(size=18, weight="bold"))
-                label.pack(padx=10, pady=10)
-                scrollable_frame = customtkinter.CTkScrollableFrame(frame, label_text="")
-                scrollable_frame.pack(padx=10, pady=10, fill="both", expand=True)
-                self.status_frames[status] = frame
-                self.status_scrollable_frames[status] = scrollable_frame
-
+        
+        # Group tasks by status
         tasks_by_status = {status: [] for status in STATUSES}
         for task in self.tasks:
-            # Vérifie que le statut est valide, sinon attribue 'Todo' comme statut par défaut
-            if task['status'] not in tasks_by_status:
-                task['status'] = 'Todo'  # Définit 'Todo' comme statut par défaut si ce n'est pas valide
-            tasks_by_status[task['status']].append(task)
-
-        # Affiche les tâches dans leurs colonnes respectives
+            if task["status"] in tasks_by_status:
+                tasks_by_status[task["status"]].append(task)
+        
+        # Create task cards with animations
         for status, tasks in tasks_by_status.items():
-            if status in self.status_scrollable_frames:
-                for task in tasks:
-                    task_frame = TaskFrame(self.status_scrollable_frames[status], task, self)
-                    task_frame.pack(padx=10, pady=5, fill="x")
+            # Update header count
+            self.columns[status]["title"].configure(
+                text=f"{status} ({len(tasks)})"
+            )
+            
+            for task in tasks:
+                self.create_task_card(self.columns[status]["scroll"], task)
+    
+    def create_task_card(self, parent, task):
+        # Priority colors
+        priority_colors = {
+            "Low": ("#10b981", "#059669"),
+            "Important": ("#f59e0b", "#d97706"),
+            "Urgent": ("#ef4444", "#dc2626")
+        }
+        
+        # Card container with hover effects
+        card = ctk.CTkFrame(
+            parent, 
+            corner_radius=10,
+            fg_color=("gray92", "gray14"),
+            border_width=1,
+            border_color=("gray80", "gray25")
+        )
+        card.pack(fill="x", pady=5)
+        
+        # Task title
+        title = ctk.CTkLabel(
+            card,
+            text=task["title"],
+            font=ctk.CTkFont(size=14, weight="bold"),
+            anchor="w"
+        )
+        title.pack(fill="x", padx=15, pady=(15, 5))
+        
+        # Priority indicator
+        priority_frame = ctk.CTkFrame(card, fg_color="transparent")
+        priority_frame.pack(fill="x", padx=15)
+        
+        priority_badge = ctk.CTkLabel(
+            priority_frame,
+            text=f"🔥 {task['priority']}",
+            font=ctk.CTkFont(size=12),
+            fg_color=priority_colors[task["priority"]],
+            corner_radius=15,
+            width=80,
+            height=25
+        )
+        priority_badge.pack(side="left")
+        
+        # Description preview
+        if task["description"]:
+            desc = ctk.CTkLabel(
+                card,
+                text=task["description"][:50] + ("..." if len(task["description"]) > 50 else ""),
+                font=ctk.CTkFont(size=11),
+                text_color=("gray50", "gray60"),
+                anchor="w"
+            )
+            desc.pack(fill="x", padx=15, pady=5)
+        
+        # Action buttons
+        btn_frame = ctk.CTkFrame(card, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=15, pady=(5, 15))
+        
+        edit_btn = ctk.CTkButton(
+            btn_frame,
+            text="✏️",
+            width=30,
+            height=25,
+            corner_radius=5,
+            command=lambda: self.edit_task(task),
+            fg_color=("gray80", "gray30"),
+            hover_color=("gray70", "gray40")
+        )
+        edit_btn.pack(side="left", padx=(0, 5))
+        
+        delete_btn = ctk.CTkButton(
+            btn_frame,
+            text="🗑️",
+            width=30,
+            height=25,
+            corner_radius=5,
+            command=lambda: self.delete_task(task),
+            fg_color=("#ef4444", "#dc2626"),
+            hover_color=("#dc2626", "#b91c1c")
+        )
+        delete_btn.pack(side="left")
+        
+        # Move buttons (with smooth transitions)
+        if task["status"] != STATUSES[-1]:
+            move_btn = ctk.CTkButton(
+                btn_frame,
+                text="➡️",
+                width=30,
+                height=25,
+                corner_radius=5,
+                command=lambda: self.move_task(task, 1),
+                fg_color=("#10b981", "#059669")
+            )
+            move_btn.pack(side="right")
+        
+        if task["status"] != STATUSES[0]:
+            back_btn = ctk.CTkButton(
+                btn_frame,
+                text="⬅️",
+                width=30,
+                height=25,
+                corner_radius=5,
+                command=lambda: self.move_task(task, -1),
+                fg_color=("#6b7280", "#4b5563")
+            )
+            back_btn.pack(side="right", padx=(5, 0))
+    
+    def show_loading(self):
+        # Loading overlay
+        self.loading_frame = ctk.CTkFrame(
+            self,
+            fg_color=("gray95", "gray10"),
+            corner_radius=0
+        )
+        self.loading_frame.place(x=0, y=0, relwidth=1, relheight=1)
+        
+        # Loading animation
+        self.loading_label = ctk.CTkLabel(
+            self.loading_frame,
+            text="⚡ Loading Ultra Modern Todo...",
+            font=ctk.CTkFont(size=24, weight="bold"),
+            text_color=("#1e40af", "#3b82f6")
+        )
+        self.loading_label.place(relx=0.5, rely=0.5, anchor="center")
+        
+        # Progress bar
+        self.progress = ctk.CTkProgressBar(self.loading_frame, width=300)
+        self.progress.place(relx=0.5, rely=0.6, anchor="center")
+        self.progress.set(0)
+        
+        # Animate loading
+        threading.Thread(target=self.animate_loading, daemon=True).start()
+    
+    def animate_loading(self):
+        for i in range(101):
+            self.progress.set(i / 100)
+            time.sleep(0.02)
+        
+        self.after(500, self.hide_loading)
+    
+    def hide_loading(self):
+        self.loading_frame.destroy()
+    
+    def show_add_dialog(self):
+        AddTaskDialog(self)
+    
+    def show_settings(self):
+        SettingsDialog(self)
+    
+    def edit_task(self, task):
+        EditTaskDialog(self, task)
+    
+    def delete_task(self, task):
+        if tk.messagebox.askyesno("Delete Task", f"Delete '{task['title']}'?"):
+            self.tasks.remove(task)
+            self.save_tasks()
+            self.update_board()
+    
+    def move_task(self, task, direction):
+        current_idx = STATUSES.index(task["status"])
+        new_idx = current_idx + direction
+        
+        if 0 <= new_idx < len(STATUSES):
+            task["status"] = STATUSES[new_idx]
+            task["updated_at"] = datetime.now().isoformat()
+            self.save_tasks()
+            self.update_board()
+    
+    def load_tasks(self):
+        if os.path.exists(DATA_FILE):
+            try:
+                with open(DATA_FILE, 'r') as f:
+                    return json.load(f)
+            except:
+                return []
+        return []
+    
+    def save_tasks(self):
+        with open(DATA_FILE, 'w') as f:
+            json.dump(self.tasks, f, indent=2)
 
+class AddTaskDialog(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("➕ Add New Task")
+        self.geometry("450x400")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        
+        # Center dialog
+        self.after(10, self.center_dialog)
+        
+        self.setup_ui()
+    
+    def center_dialog(self):
+        parent_x = self.parent.winfo_x()
+        parent_y = self.parent.winfo_y()
+        parent_width = self.parent.winfo_width()
+        parent_height = self.parent.winfo_height()
+        
+        x = parent_x + (parent_width - 450) // 2
+        y = parent_y + (parent_height - 400) // 2
+        self.geometry(f"450x400+{x}+{y}")
+    
+    def setup_ui(self):
+        # Main container
+        main = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        main.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Title field
+        ctk.CTkLabel(main, text="Task Title", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(0, 5))
+        self.title_entry = ctk.CTkEntry(main, height=40, corner_radius=10)
+        self.title_entry.pack(fill="x", pady=(0, 15))
+        
+        # Description field
+        ctk.CTkLabel(main, text="Description", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(0, 5))
+        self.desc_text = ctk.CTkTextbox(main, height=80, corner_radius=10)
+        self.desc_text.pack(fill="x", pady=(0, 15))
+        
+        # Priority and Status in one row
+        row_frame = ctk.CTkFrame(main, fg_color="transparent")
+        row_frame.pack(fill="x", pady=(0, 15))
+        
+        # Priority
+        left_frame = ctk.CTkFrame(row_frame, fg_color="transparent")
+        left_frame.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        ctk.CTkLabel(left_frame, text="Priority", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(0, 5))
+        self.priority_var = ctk.StringVar(value="Important")
+        self.priority_menu = ctk.CTkOptionMenu(left_frame, values=PRIORITIES, variable=self.priority_var, height=35)
+        self.priority_menu.pack(fill="x")
+        
+        # Status
+        right_frame = ctk.CTkFrame(row_frame, fg_color="transparent")
+        right_frame.pack(side="right", fill="both", expand=True, padx=(10, 0))
+        ctk.CTkLabel(right_frame, text="Status", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(0, 5))
+        self.status_var = ctk.StringVar(value="Todo")
+        self.status_menu = ctk.CTkOptionMenu(right_frame, values=STATUSES, variable=self.status_var, height=35)
+        self.status_menu.pack(fill="x")
+        
+        # Buttons
+        btn_frame = ctk.CTkFrame(main, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=(20, 0))
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="Cancel",
+            command=self.destroy,
+            fg_color=("gray75", "gray25"),
+            hover_color=("gray65", "gray35"),
+            height=40,
+            corner_radius=10
+        ).pack(side="right", padx=(10, 0))
+        
+        ctk.CTkButton(
+            btn_frame,
+            text="✨ Create Task",
+            command=self.create_task,
+            height=40,
+            corner_radius=10,
+            font=ctk.CTkFont(weight="bold")
+        ).pack(side="right")
+        
+        self.title_entry.focus()
+    
+    def create_task(self):
+        title = self.title_entry.get().strip()
+        if not title:
+            tk.messagebox.showerror("Error", "Title is required!")
+            return
+        
+        task = {
+            "id": str(uuid.uuid4()),
+            "title": title,
+            "description": self.desc_text.get("0.0", "end").strip(),
+            "priority": self.priority_var.get(),
+            "status": self.status_var.get(),
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        self.parent.tasks.append(task)
+        self.parent.save_tasks()
+        self.parent.update_board()
+        self.destroy()
+
+class EditTaskDialog(AddTaskDialog):
+    def __init__(self, parent, task):
+        self.task = task
+        super().__init__(parent)
+        self.title(f"✏️ Edit: {task['title']}")
+        self.populate_fields()
+    
+    def populate_fields(self):
+        self.title_entry.insert(0, self.task["title"])
+        self.desc_text.insert("0.0", self.task["description"])
+        self.priority_var.set(self.task["priority"])
+        self.status_var.set(self.task["status"])
+    
+    def create_task(self):
+        title = self.title_entry.get().strip()
+        if not title:
+            tk.messagebox.showerror("Error", "Title is required!")
+            return
+        
+        self.task.update({
+            "title": title,
+            "description": self.desc_text.get("0.0", "end").strip(),
+            "priority": self.priority_var.get(),
+            "status": self.status_var.get(),
+            "updated_at": datetime.now().isoformat()
+        })
+        
+        self.parent.save_tasks()
+        self.parent.update_board()
+        self.destroy()
+
+class SettingsDialog(ctk.CTkToplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("⚙️ Settings")
+        self.geometry("400x300")
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        
+        # Center dialog
+        self.after(10, self.center_dialog)
+        self.setup_ui()
+    
+    def center_dialog(self):
+        parent_x = self.parent.winfo_x()
+        parent_y = self.parent.winfo_y()
+        parent_width = self.parent.winfo_width()
+        parent_height = self.parent.winfo_height()
+        
+        x = parent_x + (parent_width - 400) // 2
+        y = parent_y + (parent_height - 300) // 2
+        self.geometry(f"400x300+{x}+{y}")
+    
+    def setup_ui(self):
+        main = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        main.pack(fill="both", expand=True, padx=30, pady=30)
+        
+        # Theme selection
+        ctk.CTkLabel(main, text="🎨 Appearance", font=ctk.CTkFont(size=18, weight="bold")).pack(anchor="w", pady=(0, 15))
+        
+        theme_frame = ctk.CTkFrame(main)
+        theme_frame.pack(fill="x", pady=(0, 20))
+        
+        ctk.CTkLabel(theme_frame, text="Theme Mode:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(15, 5))
+        
+        self.theme_var = ctk.StringVar(value=ctk.get_appearance_mode())
+        theme_menu = ctk.CTkOptionMenu(
+            theme_frame,
+            values=["Light", "Dark", "System"],
+            variable=self.theme_var,
+            command=self.change_theme
+        )
+        theme_menu.pack(fill="x", padx=15, pady=(0, 15))
+        
+        # About section
+        ctk.CTkLabel(main, text="ℹ️ About", font=ctk.CTkFont(size=18, weight="bold")).pack(anchor="w", pady=(20, 15))
+        
+        about_frame = ctk.CTkFrame(main)
+        about_frame.pack(fill="x")
+        
+        ctk.CTkLabel(
+            about_frame,
+            text="Ultra Modern Todo v2.0\nBuilt with CustomTkinter\n\n✨ Features:\n• Responsive design\n• Smooth animations\n• Modern UI/UX",
+            justify="left",
+            font=ctk.CTkFont(size=12)
+        ).pack(padx=15, pady=15)
+    
+    def change_theme(self, theme):
+        ctk.set_appearance_mode(theme)
 
 if __name__ == "__main__":
-    current_file = os.path.abspath(__file__)
-    check_for_updates(current_file)
-
-    customtkinter.set_appearance_mode("System")
-    customtkinter.set_default_color_theme("blue")
-
-    app = KanbanBoardApp()
+    app = ModernTodoApp()
     app.mainloop()
