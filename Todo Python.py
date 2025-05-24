@@ -7,6 +7,38 @@ from datetime import datetime
 import threading
 import time
 
+UPDATE_URL = "https://raw.githubusercontent.com/SosoTlm/todo-python/refs/heads/main/Todo%20Python.py"
+
+# Fonction pour calculer le hash SHA256 du fichier donné
+def file_hash(filepath):
+    if not os.path.exists(filepath):
+        return None
+    with open(filepath, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+# Fonction principale de mise à jour
+def check_for_update():
+    local_file = os.path.realpath(__file__)
+    try:
+        with urllib.request.urlopen(UPDATE_URL) as response:
+            latest_code = response.read()
+            latest_hash = hashlib.sha256(latest_code).hexdigest()
+
+        current_hash = file_hash(local_file)
+        
+        if latest_hash != current_hash:
+            print("🔁 Mise à jour disponible ! Mise à jour en cours...")
+            with open(local_file, "wb") as f:
+                f.write(latest_code)
+            print("✅ Mise à jour terminée. Redémarrage...")
+            os.execv(sys.executable, ['python'] + sys.argv)
+        else:
+            print("🟢 Aucune mise à jour nécessaire.")
+    except Exception as e:
+        print(f"⚠️ Erreur lors de la vérification des mises à jour : {e}")
+
+check_for_update()
+
 # Constants
 DATA_FILE = "tasks.json"
 STATUSES = ["Todo", "InProgress", "Done"]
