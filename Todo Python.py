@@ -57,7 +57,7 @@ class ModernTodoApp(ctk.CTk):
         
         self.title_label = ctk.CTkLabel(
             self.header_frame, 
-            text="✨ Ultra Modern Todo", 
+            text="✨ Todo Python", 
             font=ctk.CTkFont(size=32, weight="bold"),
             text_color=("#1e40af", "#3b82f6")
         )
@@ -270,7 +270,7 @@ class ModernTodoApp(ctk.CTk):
         # Loading animation
         self.loading_label = ctk.CTkLabel(
             self.loading_frame,
-            text="⚡ Loading Ultra Modern Todo...",
+            text="⚡ Loading Todo Python...",
             font=ctk.CTkFont(size=24, weight="bold"),
             text_color=("#1e40af", "#3b82f6")
         )
@@ -522,7 +522,7 @@ class SettingsDialog(ctk.CTkToplevel):
         
         ctk.CTkLabel(
             about_frame,
-            text="Ultra Modern Todo v2.0\nBuilt with CustomTkinter\n\n✨ Features:\n• Responsive design\n• Smooth animations\n• Modern UI/UX",
+            text="Todo Python\nBuilt with CustomTkinter\n\n✨ Features:\n• Responsive design\n• Smooth animations\n• Modern UI/UX",
             justify="left",
             font=ctk.CTkFont(size=12)
         ).pack(padx=15, pady=15)
