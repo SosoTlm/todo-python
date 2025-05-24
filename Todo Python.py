@@ -3,6 +3,8 @@ import tkinter as tk
 import json
 import os
 import uuid
+import hashlib
+import sys
 from datetime import datetime
 import threading
 import time
@@ -27,7 +29,7 @@ def check_for_update():
             latest_hash = hashlib.sha256(latest_code).hexdigest()
 
         current_hash = file_hash(local_file)
-        
+
         if latest_hash != current_hash:
             print("🔁 Mise à jour disponible ! Mise à jour en cours...")
             with open(local_file, "wb") as f:
@@ -40,6 +42,7 @@ def check_for_update():
         print(f"⚠️ Erreur lors de la vérification des mises à jour : {e}")
 
 check_for_update()
+
 
 # Constants
 DATA_FILE = "tasks.json"
