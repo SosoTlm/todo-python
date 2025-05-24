@@ -7,7 +7,7 @@ from datetime import datetime
 import threading
 import time
 import urllib
-import urllib.requests
+import urllib.request
 
 UPDATE_URL = "https://raw.githubusercontent.com/SosoTlm/todo-python/refs/heads/main/Todo%20Python.py"
 
